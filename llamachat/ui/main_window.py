@@ -14,23 +14,45 @@ import qasync
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.db_service = DatabaseService()
-        self.ollama_service = OllamaService()
+        self.setup_services()
+        
+        # Create loading overlay before UI setup
         self.loading = OverlayLoading("Initializing application...", self)
         self.loading.start()
+        
         self.setup_ui()
-        # Load chats after a short delay to allow UI to show
-        QTimer.singleShot(100, self.initialize_app)
+        self.setup_connections()
+        self.initialize_app()
+
+    def setup_services(self):
+        """Initialize all services."""
+        self.db_service = DatabaseService()
+        self.ollama_service = OllamaService()
+
+    def setup_connections(self):
+        """Setup all signal connections."""
+        self.chat_widget.message_sent.connect(self.update_chat_list)
+        self.chat_widget.error_occurred.connect(self.show_error_dialog)
+        
+    def show_error_dialog(self, message: str):
+        """Show error dialog to user."""
+        QMessageBox.critical(
+            self,
+            "Error",
+            message,
+            QMessageBox.StandardButton.Ok
+        )
 
     @qasync.asyncSlot()
     async def initialize_app(self):
         """Initialize the application asynchronously."""
+        self.loading.setText("Initializing application...")
         try:
-            # First load chats (this is fast)
+            # Load chats
             self.load_chats()
             
-            # Then warm up Ollama in background
-            self.loading.setText("Warming up AI model in background...")
+            # Warm up Ollama
+            self.loading.setText("Warming up AI model...")
             success = await self.ollama_service.warmup()
             
             if not success:
@@ -39,7 +61,6 @@ class MainWindow(QMainWindow):
                     "Warmup Warning",
                     "AI model warmup failed. The first response might be slower than usual."
                 )
-            
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -47,7 +68,6 @@ class MainWindow(QMainWindow):
                 f"Error during initialization: {str(e)}"
             )
         finally:
-            # Hide the loading indicator even if warmup is still in progress
             self.loading.stop()
 
     def setup_ui(self):

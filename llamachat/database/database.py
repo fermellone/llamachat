@@ -1,10 +1,8 @@
 from sqlmodel import SQLModel, create_engine, Session
 from typing import Generator
-import os
+from llamachat.config import AppConfig
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:root@localhost:5432/llamachat")
-
-engine = create_engine(DATABASE_URL)
+engine = create_engine(AppConfig.database_url)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

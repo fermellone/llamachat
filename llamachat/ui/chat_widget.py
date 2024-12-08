@@ -18,26 +18,32 @@ from .widgets.inline_loading import InlineLoading
 
 class ChatWidget(QWidget):
     message_sent = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)  # New signal for error handling
     
     def __init__(self):
         super().__init__()
         self.db_service = DatabaseService()
         self.ollama_service = OllamaService()
         self.current_chat_id = None
-        self.scroll_timer = QTimer()
-        self.scroll_timer.setSingleShot(True)
-        self.scroll_timer.timeout.connect(self._perform_scroll)
+        self.is_processing = False  # Flag to prevent multiple simultaneous requests
         
         # Create inline loading indicator
         self.loading = InlineLoading(self)
         self.loading.hide()
         
+        self.setup_timers()
+        self.setup_ui()
+        logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
+
+    def setup_timers(self):
+        """Setup all timers used by the widget."""
+        self.scroll_timer = QTimer()
+        self.scroll_timer.setSingleShot(True)
+        self.scroll_timer.timeout.connect(self._perform_scroll)
+        
         self.scroll_start = 0
         self.scroll_start_time = 0
         self.scroll_duration = 0.3
-        
-        self.setup_ui()
-        logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -161,7 +167,11 @@ class ChatWidget(QWidget):
 
     @qasync.asyncSlot()
     async def handle_ai_response(self, messages):
-        # Show loading indicator
+        if self.is_processing:
+            logger.warning("Already processing a response, ignoring request")
+            return
+            
+        self.is_processing = True
         self.loading.start()
         
         start_time = time.time()
@@ -217,13 +227,17 @@ class ChatWidget(QWidget):
                 "assistant"
             )
 
-            self.loading.stop()
         except Exception as e:
+            error_msg = f"Error generating response: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            self.error_occurred.emit(error_msg)
+            if temp_message:
+                temp_message.content = error_msg
+                model_index = self.chat_model.index(last_index)
+                self.chat_model.dataChanged.emit(model_index, model_index)
+        finally:
+            self.is_processing = False
             self.loading.stop()
-            logger.error(f"Error in handle_ai_response: {str(e)}", exc_info=True)
-            temp_message.content = f"Error generating response: {str(e)}"
-            model_index = self.chat_model.index(last_index)
-            self.chat_model.dataChanged.emit(model_index, model_index)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

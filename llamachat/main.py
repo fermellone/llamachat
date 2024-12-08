@@ -1,44 +1,48 @@
-from llamachat.ui.main_window import MainWindow
-from PyQt6.QtWidgets import QApplication
-from llamachat.database.database import init_db
-from llamachat.services.ollama_service import OllamaService
+from llamachat.config import AppConfig
 import sys
+import logging
 import qasync
 import asyncio
-import logging
+from PyQt6.QtWidgets import QApplication
+from .ui.main_window import MainWindow
+from .database.database import init_db
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('llamachat.log')
-    ]
-)
-
-logger = logging.getLogger(__name__)
+def setup_logging(config: AppConfig):
+    """Setup application logging."""
+    logging.basicConfig(
+        level=getattr(logging, config.log_level),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('llamachat.log')
+        ]
+    )
 
 def main():
     try:
+        # Load configuration
+        config = AppConfig.load()
+        
+        # Setup logging
+        setup_logging(config)
+        logger = logging.getLogger(__name__)
         logger.info("Starting LlamaChat")
-        # Initialize the database
+        
+        # Initialize database
         init_db()
         
-        # Create the Qt application
+        # Create Qt application
         app = QApplication(sys.argv)
         
-        # Create qasync loop
-        logger.debug("Creating event loop")
+        # Create event loop
         loop = qasync.QEventLoop(app)
         asyncio.set_event_loop(loop)
-
-        # Create and show the main window
+        
+        # Create main window
         window = MainWindow()
         window.show()
         
-        # Run the event loop
-        logger.info("Starting event loop")
+        # Run event loop
         with loop:
             loop.run_forever()
             
