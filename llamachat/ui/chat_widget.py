@@ -233,3 +233,12 @@ class ChatWidget(QWidget):
                 self.chat_input.x() + 10,
                 self.chat_input.y() - 25
             )
+
+    def clear_chat(self):
+        """Clear the current chat and reset state."""
+        self.current_chat_id = None
+        self.chat_model.clear()
+        
+        # Stop any ongoing loading
+        if self.loading and self.loading.isVisible():
+            self.loading.stop()
