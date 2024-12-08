@@ -2,6 +2,8 @@ from llamachat.ui.main_window import MainWindow
 from PyQt6.QtWidgets import QApplication
 from llamachat.database.database import init_db
 import sys
+import qasync
+import asyncio
 
 def main():
     # Initialize the database
@@ -14,8 +16,16 @@ def main():
     window = MainWindow()
     window.show()
     
-    # Start the event loop
-    sys.exit(app.exec())
+    # Create the qasync loop
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
+    # Run the event loop
+    with loop:
+        loop.run_forever()
 
 if __name__ == "__main__":
-    main() 
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(0)

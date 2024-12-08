@@ -18,6 +18,6 @@ class Message(SQLModel, table=True):
 
 class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    model_name: str = Field(default="llama2")
+    model_name: str = Field(default="llama3.2")
     temperature: float = Field(default=0.7)
     max_tokens: int = Field(default=2000) 
