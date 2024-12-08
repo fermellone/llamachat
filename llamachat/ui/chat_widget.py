@@ -240,8 +240,8 @@ class ChatWidget(QWidget):
         response_content = await self.process_ollama_response(messages)
         self.db_service.add_message(self.current_chat_id, response_content, "assistant")
         
-        # Add assistant message to the view
-        self.chat_model.add_message(ChatMessage(content=response_content, role="assistant"))
+        # No need to add another message here since we're using the temporary one
+        # Just scroll to bottom to ensure visibility
         self.chat_view.scrollToBottom()
 
     async def process_ollama_response(self, messages):
