@@ -2,6 +2,11 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListView
 from PyQt6.QtCore import pyqtSignal, Qt
 import asyncio
 import qasync
+import threading
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 from .models.chat_message import ChatMessage
 from .models.chat_list_model import ChatListModel
@@ -19,6 +24,7 @@ class ChatWidget(QWidget):
         self.ollama_service = OllamaService()
         self.current_chat_id = None
         self.setup_ui()
+        logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -65,6 +71,7 @@ class ChatWidget(QWidget):
         self.chat_view.scrollToBottom()
 
     def send_message(self, message: str):
+        logger.debug(f"send_message called in thread: {threading.current_thread().name}")
         if self.current_chat_id is None:
             chat = self.db_service.create_chat()
             self.current_chat_id = chat.id
@@ -80,34 +87,61 @@ class ChatWidget(QWidget):
             for msg in self.db_service.get_chat_messages(self.current_chat_id)
         ]
 
-        # Use qasync.asyncSlot() to handle the async call properly
+        logger.debug("Calling handle_ai_response")
         self.handle_ai_response(messages)
 
     @qasync.asyncSlot()
     async def handle_ai_response(self, messages):
-        # Add temporary message for streaming response
-        temp_message = ChatMessage(content="", role="assistant")
+        start_time = time.time()
+        logger.debug(f"handle_ai_response started in thread: {threading.current_thread().name}")
+        
+        # Add temporary message with loading indicator
+        temp_message = ChatMessage(content="Generating response...", role="assistant")
         self.chat_model.add_message(temp_message)
         last_index = len(self.chat_model.messages) - 1
         response_content = ""
+        chunk_count = 0
 
         try:
+            logger.debug("Starting to process AI response stream")
             async for chunk in self.ollama_service.get_response(messages):
+                chunk_count += 1
                 response_content += chunk
-                # Update the temporary message
-                temp_message.content = response_content
-                # Notify the view that the item has changed
-                model_index = self.chat_model.index(last_index)
-                self.chat_model.dataChanged.emit(model_index, model_index)
-                self.chat_view.scrollToBottom()
-                # Give the event loop a chance to process other events
-                await asyncio.sleep(0)
+                
+                # Update UI less frequently to reduce overhead
+                if chunk_count % 3 == 0:  # Update every 3 chunks
+                    temp_message.content = response_content
+                    model_index = self.chat_model.index(last_index)
+                    self.chat_model.dataChanged.emit(model_index, model_index)
+                    
+                    if chunk_count % 30 == 0:  # Log every 30 chunks
+                        logger.debug(
+                            f"Processing chunk {chunk_count} in thread: {threading.current_thread().name}, "
+                            f"content length: {len(response_content)}, "
+                            f"time elapsed: {time.time() - start_time:.2f}s"
+                        )
+                    
+                    # Scroll and yield to event loop less frequently
+                    if chunk_count % 10 == 0:
+                        self.chat_view.scrollToBottom()
+                        await asyncio.sleep(0.01)
 
-            # Save the complete message to database
-            self.db_service.add_message(self.current_chat_id, response_content, "assistant")
+            # Final update with complete response
+            temp_message.content = response_content
+            model_index = self.chat_model.index(last_index)
+            self.chat_model.dataChanged.emit(model_index, model_index)
+            self.chat_view.scrollToBottom()
+
+            logger.debug(f"Stream completed in {time.time() - start_time:.2f}s, saving to database")
+            await asyncio.to_thread(
+                self.db_service.add_message,
+                self.current_chat_id,
+                response_content,
+                "assistant"
+            )
 
         except Exception as e:
-            # Handle any errors during generation
+            logger.error(f"Error in handle_ai_response: {str(e)}", exc_info=True)
             temp_message.content = f"Error generating response: {str(e)}"
             model_index = self.chat_model.index(last_index)
             self.chat_model.dataChanged.emit(model_index, model_index)
