@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListView, QScrollBar
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListView
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 import asyncio
 import qasync
@@ -14,7 +14,7 @@ from .delegates.chat_delegate import ChatDelegate
 from .chat_input import ChatInput
 from ..services.database_service import DatabaseService
 from ..services.ollama_service import OllamaService
-from .widgets.loading_indicator import LoadingIndicator
+from .widgets.inline_loading import InlineLoading
 
 class ChatWidget(QWidget):
     message_sent = pyqtSignal(str)
@@ -27,8 +27,15 @@ class ChatWidget(QWidget):
         self.scroll_timer = QTimer()
         self.scroll_timer.setSingleShot(True)
         self.scroll_timer.timeout.connect(self._perform_scroll)
-        self.loading = LoadingIndicator("", self)
+        
+        # Create inline loading indicator
+        self.loading = InlineLoading(self)
         self.loading.hide()
+        
+        self.scroll_start = 0
+        self.scroll_start_time = 0
+        self.scroll_duration = 0.3
+        
         self.setup_ui()
         logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
 
@@ -48,11 +55,10 @@ class ChatWidget(QWidget):
         layout.addWidget(self.chat_view)
         layout.addWidget(self.chat_input)
         
-        # Position loading indicator in center
-        self.loading.setParent(self)
+        # Position loading indicator at the bottom
         self.loading.move(
-            (self.width() - self.loading.width()) // 2,
-            (self.height() - self.loading.height()) // 2
+            self.chat_input.x() + 10,  # 10px margin from left
+            self.chat_input.y() - 25    # 25px above chat input
         )
 
     def setup_chat_view(self):
@@ -69,24 +75,34 @@ class ChatWidget(QWidget):
 
     def smooth_scroll_to_bottom(self):
         """Schedule a smooth scroll to bottom."""
+        scrollbar = self.chat_view.verticalScrollBar()
         if not self.scroll_timer.isActive():
-            self.scroll_timer.start(10)  # 10ms delay
+            self.scroll_timer.start(16)  # ~60 FPS for smoother animation
+            self.scroll_start = scrollbar.value()
+            self.scroll_target = scrollbar.maximum()
+            self.scroll_start_time = time.time()
+            self.scroll_duration = 0.3  # 300ms animation
 
     def _perform_scroll(self):
-        """Actually perform the scroll operation."""
+        """Perform smooth scroll animation using easing."""
         scrollbar = self.chat_view.verticalScrollBar()
-        current = scrollbar.value()
-        maximum = scrollbar.maximum()
+        current_time = time.time()
+        elapsed = current_time - self.scroll_start_time
         
-        if current < maximum:
-            # Smooth scroll animation
-            step = (maximum - current) // 4  # Adjust divisor to control speed
-            new_value = min(current + step, maximum)
-            scrollbar.setValue(new_value)
+        if elapsed < self.scroll_duration:
+            # Easing function (ease-out cubic)
+            progress = elapsed / self.scroll_duration
+            t = 1 - (1 - progress) ** 3
             
-            # Continue scrolling if not at bottom
-            if new_value < maximum:
-                self.scroll_timer.start(10)
+            # Calculate new position
+            new_value = self.scroll_start + (self.scroll_target - self.scroll_start) * t
+            scrollbar.setValue(int(new_value))
+            
+            # Continue animation
+            self.scroll_timer.start(16)
+        else:
+            # Ensure we reach the exact target
+            scrollbar.setValue(self.scroll_target)
 
     def set_chat(self, chat_id: int):
         """Set the current chat and load its history."""
@@ -98,7 +114,7 @@ class ChatWidget(QWidget):
         if self.current_chat_id is None:
             return
         
-        self.loading.setText("Loading chat history...")
+        # Start loading indicator without text
         self.loading.start()
         
         # Clear existing messages
@@ -111,7 +127,17 @@ class ChatWidget(QWidget):
             self.chat_model.add_message(chat_message)
         
         self.loading.stop()
-        self.smooth_scroll_to_bottom()
+        
+        # Schedule scroll after the view has been updated
+        QTimer.singleShot(100, self.delayed_scroll_to_bottom)
+
+    def delayed_scroll_to_bottom(self):
+        """Scroll to bottom after the view has been updated."""
+        scrollbar = self.chat_view.verticalScrollBar()
+        if scrollbar.maximum() > 0:  # Only scroll if there's content
+            self.smooth_scroll_to_bottom()
+        else:  # If content not ready yet, try again
+            QTimer.singleShot(50, self.delayed_scroll_to_bottom)
 
     def send_message(self, message: str):
         logger.debug(f"send_message called in thread: {threading.current_thread().name}")
@@ -135,14 +161,14 @@ class ChatWidget(QWidget):
 
     @qasync.asyncSlot()
     async def handle_ai_response(self, messages):
-        self.loading.setText("Generating response...")
+        # Show loading indicator
         self.loading.start()
         
         start_time = time.time()
         logger.debug(f"handle_ai_response started in thread: {threading.current_thread().name}")
         
         # Add temporary message with loading indicator
-        temp_message = ChatMessage(content="Generating response...", role="assistant")
+        temp_message = ChatMessage(content="", role="assistant")  # Empty content initially
         self.chat_model.add_message(temp_message)
         last_index = len(self.chat_model.messages) - 1
         response_content = ""
@@ -201,8 +227,9 @@ class ChatWidget(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # Update loading indicator position when window resizes
         if self.loading:
             self.loading.move(
-                (self.width() - self.loading.width()) // 2,
-                (self.height() - self.loading.height()) // 2
+                self.chat_input.x() + 10,
+                self.chat_input.y() - 25
             )

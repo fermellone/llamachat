@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from llamachat.ui.chat_widget import ChatWidget
 from llamachat.services.database_service import DatabaseService
-from .widgets.loading_indicator import LoadingIndicator
+from .widgets.overlay_loading import OverlayLoading
 from ..services.ollama_service import OllamaService
 import qasync
 
@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db_service = DatabaseService()
         self.ollama_service = OllamaService()
-        self.loading = LoadingIndicator("Initializing application...", self)
+        self.loading = OverlayLoading("Initializing application...", self)
         self.loading.start()
         self.setup_ui()
         # Load chats after a short delay to allow UI to show
