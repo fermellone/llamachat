@@ -2,12 +2,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, 
     QPushButton, QHBoxLayout
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 import markdown
 from llamachat.services.database_service import DatabaseService
 from llamachat.services.ollama_service import OllamaService
 import asyncio
-from functools import partial
 
 class ChatWidget(QWidget):
     message_sent = pyqtSignal(str)

@@ -1,6 +1,5 @@
 from typing import List, Optional
-from datetime import datetime
-from sqlmodel import Session, select
+from sqlmodel import select
 from llamachat.database.models import Chat, Message, Settings
 from llamachat.database.database import get_session
 
