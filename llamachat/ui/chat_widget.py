@@ -2,8 +2,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, 
     QPushButton, QHBoxLayout
 )
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import pyqtSignal, Qt, QEvent
+from PyQt6.QtGui import QTextCursor, QKeyEvent
 import markdown
 from llamachat.services.database_service import DatabaseService
 from llamachat.services.ollama_service import OllamaService
@@ -60,6 +60,16 @@ class ChatWidget(QWidget):
         
         layout.addWidget(self.chat_display)
         layout.addLayout(input_layout)
+
+        # Connect message input events
+        self.message_input.installEventFilter(self)
+
+        # Add tooltip for message input
+        modifier_key = "⌘" if self.is_macos() else "Ctrl"
+        self.message_input.setToolTip(
+            f"Press Return to send message\n"
+            f"Press {modifier_key}+Return to add a new line"
+        )
 
     def set_chat(self, chat_id: int):
         self.current_chat_id = chat_id
@@ -164,3 +174,28 @@ class ChatWidget(QWidget):
         self.current_response_cursor = None
         self.chat_display.clear()
         self.message_input.clear()
+
+    def eventFilter(self, source: QWidget, event: QEvent) -> bool:
+        if source == self.message_input and event.type() == QEvent.Type.KeyPress:
+            # Cast event to QKeyEvent instead of creating a new one
+            key_event = event
+            
+            # Check for platform-specific modifier keys
+            modifier = Qt.KeyboardModifier.MetaModifier if self.is_macos() else Qt.KeyboardModifier.ControlModifier
+            
+            # Handle Return/Enter key
+            if key_event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                # If modifier (Cmd/Ctrl) is pressed, insert newline
+                if key_event.modifiers() & modifier:
+                    self.message_input.insertPlainText('\n')
+                    return True
+                # If no modifier, send message
+                elif not key_event.modifiers():
+                    self.send_message()
+                    return True
+        
+        return super().eventFilter(source, event)
+
+    def is_macos(self) -> bool:
+        import sys
+        return sys.platform == 'darwin'
