@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListView
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QListView, QScrollBar
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 import asyncio
 import qasync
 import threading
@@ -23,6 +23,9 @@ class ChatWidget(QWidget):
         self.db_service = DatabaseService()
         self.ollama_service = OllamaService()
         self.current_chat_id = None
+        self.scroll_timer = QTimer()
+        self.scroll_timer.setSingleShot(True)
+        self.scroll_timer.timeout.connect(self._perform_scroll)
         self.setup_ui()
         logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
 
@@ -47,6 +50,33 @@ class ChatWidget(QWidget):
         self.chat_view.setItemDelegate(self.chat_delegate)
         self.chat_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.chat_view.setSpacing(10)
+        self.chat_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        
+        # Enable smooth scrolling
+        scrollbar = self.chat_view.verticalScrollBar()
+        scrollbar.setSingleStep(10)
+        scrollbar.setPageStep(self.chat_view.height())
+
+    def smooth_scroll_to_bottom(self):
+        """Schedule a smooth scroll to bottom."""
+        if not self.scroll_timer.isActive():
+            self.scroll_timer.start(10)  # 10ms delay
+
+    def _perform_scroll(self):
+        """Actually perform the scroll operation."""
+        scrollbar = self.chat_view.verticalScrollBar()
+        current = scrollbar.value()
+        maximum = scrollbar.maximum()
+        
+        if current < maximum:
+            # Smooth scroll animation
+            step = (maximum - current) // 4  # Adjust divisor to control speed
+            new_value = min(current + step, maximum)
+            scrollbar.setValue(new_value)
+            
+            # Continue scrolling if not at bottom
+            if new_value < maximum:
+                self.scroll_timer.start(10)
 
     def set_chat(self, chat_id: int):
         """Set the current chat and load its history."""
@@ -67,8 +97,8 @@ class ChatWidget(QWidget):
             chat_message = ChatMessage(content=msg.content, role=msg.role)
             self.chat_model.add_message(chat_message)
         
-        # Scroll to bottom
-        self.chat_view.scrollToBottom()
+        # Smooth scroll to bottom
+        self.smooth_scroll_to_bottom()
 
     def send_message(self, message: str):
         logger.debug(f"send_message called in thread: {threading.current_thread().name}")
@@ -101,6 +131,8 @@ class ChatWidget(QWidget):
         last_index = len(self.chat_model.messages) - 1
         response_content = ""
         chunk_count = 0
+        last_scroll_time = 0
+        scroll_interval = 0.1  # seconds
 
         try:
             logger.debug("Starting to process AI response stream")
@@ -114,23 +146,26 @@ class ChatWidget(QWidget):
                     model_index = self.chat_model.index(last_index)
                     self.chat_model.dataChanged.emit(model_index, model_index)
                     
-                    if chunk_count % 30 == 0:  # Log every 30 chunks
+                    # Log every 30 chunks
+                    if chunk_count % 30 == 0:
                         logger.debug(
                             f"Processing chunk {chunk_count} in thread: {threading.current_thread().name}, "
                             f"content length: {len(response_content)}, "
                             f"time elapsed: {time.time() - start_time:.2f}s"
                         )
                     
-                    # Scroll and yield to event loop less frequently
-                    if chunk_count % 10 == 0:
-                        self.chat_view.scrollToBottom()
+                    # Smooth scrolling with rate limiting
+                    current_time = time.time()
+                    if current_time - last_scroll_time >= scroll_interval:
+                        self.smooth_scroll_to_bottom()
+                        last_scroll_time = current_time
                         await asyncio.sleep(0.01)
 
             # Final update with complete response
             temp_message.content = response_content
             model_index = self.chat_model.index(last_index)
             self.chat_model.dataChanged.emit(model_index, model_index)
-            self.chat_view.scrollToBottom()
+            self.smooth_scroll_to_bottom()
 
             logger.debug(f"Stream completed in {time.time() - start_time:.2f}s, saving to database")
             await asyncio.to_thread(
