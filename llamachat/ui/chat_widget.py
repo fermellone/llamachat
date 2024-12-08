@@ -82,7 +82,7 @@ class ChatWidget(QWidget):
         message_html = f"""
             <div style='margin-bottom: 10px;'>
                 <strong style='{role_style}'>{role_name}:</strong>
-                <div style='margin-left: 20px; color: #000000;'>{html_content}</div>
+                <div style='color: #000000;'>{html_content}</div>
             </div>
         """
         self.chat_display.append(message_html)
