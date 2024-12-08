@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, 
     QPushButton, QSplitter, QListWidget,
-    QListWidgetItem, QMessageBox, QMenu
+    QListWidgetItem, QMessageBox, QMenu,
+    QInputDialog
 )
 from PyQt6.QtCore import Qt
 from llamachat.ui.chat_widget import ChatWidget
@@ -92,11 +93,15 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu()
+        rename_action = menu.addAction("Rename Chat")
         delete_action = menu.addAction("Delete Chat")
+        
         action = menu.exec(self.chat_list.mapToGlobal(position))
         
         if action == delete_action:
             self.confirm_delete_chat(item)
+        elif action == rename_action:
+            self.rename_chat(item)
 
     def confirm_delete_chat(self, item):
         chat_id = item.data(Qt.ItemDataRole.UserRole)
@@ -119,3 +124,18 @@ class MainWindow(QMainWindow):
                 # Clear the chat widget if the deleted chat was selected
                 if self.chat_widget.current_chat_id == chat_id:
                     self.chat_widget.clear_chat()
+
+    def rename_chat(self, item):
+        chat_id = item.data(Qt.ItemDataRole.UserRole)
+        current_title = item.text()
+        
+        new_title, ok = QInputDialog.getText(
+            self,
+            "Rename Chat",
+            "Enter new chat name:",
+            text=current_title
+        )
+        
+        if ok and new_title.strip():
+            if self.db_service.rename_chat(chat_id, new_title):
+                item.setText(new_title)

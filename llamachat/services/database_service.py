@@ -63,3 +63,16 @@ class DatabaseService:
             print(f"Error deleting chat: {e}")
             self.session.rollback()
             return False
+
+    def rename_chat(self, chat_id: int, new_title: str) -> bool:
+        try:
+            chat = self.get_chat(chat_id)
+            if chat:
+                chat.title = new_title
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            print(f"Error renaming chat: {e}")
+            self.session.rollback()
+            return False
