@@ -2,7 +2,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, 
     QPushButton, QHBoxLayout
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QTextCursor
 import markdown
 from llamachat.services.database_service import DatabaseService
 from llamachat.services.ollama_service import OllamaService
@@ -16,6 +17,7 @@ class ChatWidget(QWidget):
         self.db_service = DatabaseService()
         self.ollama_service = OllamaService()
         self.current_chat_id = None
+        self.current_response_cursor = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -69,6 +71,7 @@ class ChatWidget(QWidget):
         
         messages = self.db_service.get_chat_messages(self.current_chat_id)
         self.chat_display.clear()
+        self.current_response_cursor = None
         
         for message in messages:
             self.display_message(message.content, message.role)
@@ -79,24 +82,56 @@ class ChatWidget(QWidget):
         role_name = "Assistant" if role == "assistant" else "You"
         
         message_html = f"""
-            <div style='margin-bottom: 10px;'>
+            <div style='margin-bottom: 20px;'>
                 <strong style='{role_style}'>{role_name}:</strong>
-                <div style='color: #000000;'>{html_content}</div>
+                <div style='margin-top: 5px; color: #000000;'>{html_content}</div>
             </div>
         """
         self.chat_display.append(message_html)
+        self.chat_display.ensureCursorVisible()
+
+    def start_assistant_message(self):
+        role_style = "color: #0084ff;"
+        message_html = f"""
+            <div style='margin-bottom: 20px;'>
+                <strong style='{role_style}'>Assistant:</strong>
+                <div style='margin-top: 5px;'></div>
+            </div>
+        """
+        self.chat_display.append(message_html)
+        self.current_response_cursor = self.chat_display.textCursor()
+        self.chat_display.ensureCursorVisible()
+
+    def update_assistant_message(self, content: str):
+        if self.current_response_cursor:
+            html_content = markdown.markdown(content)
+            role_style = "color: #0084ff;"
+            message_html = f"""
+                <div style='margin-bottom: 20px;'>
+                    <strong style='{role_style}'>Assistant:</strong>
+                    <div style='margin-left: 20px; margin-top: 5px;'>{html_content}</div>
+                </div>
+            """
+            self.chat_display.clear()
+            self.chat_display.setHtml(self.chat_display.toHtml().replace(
+                self.chat_display.toHtml().split("</body>")[0].split("<body")[-1],
+                "<body>" + html_content + "</body>"
+            ))
+            self.chat_display.ensureCursorVisible()
 
     async def process_ollama_response(self, messages):
         response_content = ""
+        self.start_assistant_message()
+        
         async for chunk in self.ollama_service.get_response(messages):
             response_content += chunk
-        # Display the complete response once
-        self.display_message(response_content, "assistant")
+            self.update_assistant_message(chunk)
+        
+        self.current_response_cursor = None
         return response_content
 
     def send_message(self):
         if self.current_chat_id is None:
-            # Create new chat if none exists
             chat = self.db_service.create_chat()
             self.current_chat_id = chat.id
             self.message_sent.emit(chat.title)
@@ -116,16 +151,16 @@ class ChatWidget(QWidget):
             for msg in self.db_service.get_chat_messages(self.current_chat_id)
         ]
 
-        # Process AI response asynchronously using qasync
+        # Process AI response asynchronously
         loop = asyncio.get_event_loop()
         loop.create_task(self.handle_ai_response(messages))
 
     async def handle_ai_response(self, messages):
         response_content = await self.process_ollama_response(messages)
-        # Save AI response to database
         self.db_service.add_message(self.current_chat_id, response_content, "assistant")
 
     def clear_chat(self):
         self.current_chat_id = None
+        self.current_response_cursor = None
         self.chat_display.clear()
         self.message_input.clear()
