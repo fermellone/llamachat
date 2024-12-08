@@ -11,7 +11,8 @@ class ChatDelegate(QStyledItemDelegate):
     
     def __init__(self):
         super().__init__()
-        self.font = QFont("SF Pro", 12)
+        self.font = QFont()
+        self.font.setPointSize(12)
         self.metrics = QFontMetrics(self.font)
     
     def paint(self, painter: QPainter, option, index):

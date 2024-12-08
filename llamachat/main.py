@@ -12,13 +12,13 @@ def main():
     # Create the Qt application
     app = QApplication(sys.argv)
     
+    # Create qasync loop
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
     # Create and show the main window
     window = MainWindow()
     window.show()
-    
-    # Create the qasync loop
-    loop = qasync.QEventLoop(app)
-    asyncio.set_event_loop(loop)
     
     # Run the event loop
     with loop:
