@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, 
     QPushButton, QSplitter, QListWidget,
-    QListWidgetItem
+    QListWidgetItem, QMessageBox, QMenu
 )
 from PyQt6.QtCore import Qt
 from llamachat.ui.chat_widget import ChatWidget
@@ -58,6 +58,10 @@ class MainWindow(QMainWindow):
         splitter.setSizes([200, 600])
         
         layout.addWidget(splitter)
+        
+        # Add context menu to chat list
+        self.chat_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.chat_list.customContextMenuRequested.connect(self.show_context_menu)
 
     def load_chats(self):
         self.chat_list.clear()
@@ -81,3 +85,37 @@ class MainWindow(QMainWindow):
 
     def update_chat_list(self, title):
         self.load_chats()
+
+    def show_context_menu(self, position):
+        item = self.chat_list.itemAt(position)
+        if item is None:
+            return
+
+        menu = QMenu()
+        delete_action = menu.addAction("Delete Chat")
+        action = menu.exec(self.chat_list.mapToGlobal(position))
+        
+        if action == delete_action:
+            self.confirm_delete_chat(item)
+
+    def confirm_delete_chat(self, item):
+        chat_id = item.data(Qt.ItemDataRole.UserRole)
+        
+        # Show confirmation dialog
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setText("Are you sure you want to delete this chat?")
+        msg_box.setInformativeText("This action cannot be undone.")
+        msg_box.setWindowTitle("Confirm Delete")
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        
+        if msg_box.exec() == QMessageBox.StandardButton.Yes:
+            if self.db_service.delete_chat(chat_id):
+                row = self.chat_list.row(item)
+                self.chat_list.takeItem(row)
+                # Clear the chat widget if the deleted chat was selected
+                if self.chat_widget.current_chat_id == chat_id:
+                    self.chat_widget.clear_chat()

@@ -125,3 +125,8 @@ class ChatWidget(QWidget):
         response_content = await self.process_ollama_response(messages)
         # Save AI response to database
         self.db_service.add_message(self.current_chat_id, response_content, "assistant")
+
+    def clear_chat(self):
+        self.current_chat_id = None
+        self.chat_display.clear()
+        self.message_input.clear()

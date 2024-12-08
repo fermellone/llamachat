@@ -43,3 +43,23 @@ class DatabaseService:
             self.session.commit()
             self.session.refresh(settings)
         return settings 
+
+    def delete_chat(self, chat_id: int) -> bool:
+        try:
+            # First delete all messages associated with the chat
+            statement = select(Message).where(Message.chat_id == chat_id)
+            messages = self.session.exec(statement).all()
+            for message in messages:
+                self.session.delete(message)
+            
+            # Then delete the chat itself
+            chat = self.get_chat(chat_id)
+            if chat:
+                self.session.delete(chat)
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            print(f"Error deleting chat: {e}")
+            self.session.rollback()
+            return False
