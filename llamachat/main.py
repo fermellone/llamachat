@@ -37,10 +37,6 @@ def main():
         window = MainWindow()
         window.show()
         
-        # Schedule the warmup
-        ollama_service = OllamaService()
-        loop.create_task(ollama_service.warmup())
-        
         # Run the event loop
         logger.info("Starting event loop")
         with loop:
