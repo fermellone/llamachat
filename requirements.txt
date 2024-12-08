@@ -1,0 +1,6 @@
+ollama>=0.4.4
+PyQt6>=6.4.0
+sqlmodel>=0.0.22
+psycopg2-binary>=2.9.10
+python-dotenv>=1.0.1
+markdown>=3.5.1 
