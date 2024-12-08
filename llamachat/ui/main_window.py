@@ -4,16 +4,51 @@ from PyQt6.QtWidgets import (
     QListWidgetItem, QMessageBox, QMenu,
     QInputDialog
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from llamachat.ui.chat_widget import ChatWidget
 from llamachat.services.database_service import DatabaseService
+from .widgets.loading_indicator import LoadingIndicator
+from ..services.ollama_service import OllamaService
+import qasync
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.db_service = DatabaseService()
+        self.ollama_service = OllamaService()
+        self.loading = LoadingIndicator("Initializing application...", self)
+        self.loading.start()
         self.setup_ui()
-        self.load_chats()
+        # Load chats after a short delay to allow UI to show
+        QTimer.singleShot(100, self.initialize_app)
+
+    @qasync.asyncSlot()
+    async def initialize_app(self):
+        """Initialize the application asynchronously."""
+        try:
+            # First load chats (this is fast)
+            self.load_chats()
+            
+            # Then warm up Ollama in background
+            self.loading.setText("Warming up AI model in background...")
+            success = await self.ollama_service.warmup()
+            
+            if not success:
+                QMessageBox.warning(
+                    self,
+                    "Warmup Warning",
+                    "AI model warmup failed. The first response might be slower than usual."
+                )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Initialization Error",
+                f"Error during initialization: {str(e)}"
+            )
+        finally:
+            # Hide the loading indicator even if warmup is still in progress
+            self.loading.stop()
 
     def setup_ui(self):
         self.setWindowTitle("Local Chat Assistant")

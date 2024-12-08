@@ -14,6 +14,7 @@ from .delegates.chat_delegate import ChatDelegate
 from .chat_input import ChatInput
 from ..services.database_service import DatabaseService
 from ..services.ollama_service import OllamaService
+from .widgets.loading_indicator import LoadingIndicator
 
 class ChatWidget(QWidget):
     message_sent = pyqtSignal(str)
@@ -26,6 +27,8 @@ class ChatWidget(QWidget):
         self.scroll_timer = QTimer()
         self.scroll_timer.setSingleShot(True)
         self.scroll_timer.timeout.connect(self._perform_scroll)
+        self.loading = LoadingIndicator("", self)
+        self.loading.hide()
         self.setup_ui()
         logger.debug(f"ChatWidget initialized in thread: {threading.current_thread().name}")
 
@@ -44,6 +47,13 @@ class ChatWidget(QWidget):
         
         layout.addWidget(self.chat_view)
         layout.addWidget(self.chat_input)
+        
+        # Position loading indicator in center
+        self.loading.setParent(self)
+        self.loading.move(
+            (self.width() - self.loading.width()) // 2,
+            (self.height() - self.loading.height()) // 2
+        )
 
     def setup_chat_view(self):
         self.chat_view.setModel(self.chat_model)
@@ -88,6 +98,9 @@ class ChatWidget(QWidget):
         if self.current_chat_id is None:
             return
         
+        self.loading.setText("Loading chat history...")
+        self.loading.start()
+        
         # Clear existing messages
         self.chat_model.clear()
         
@@ -97,7 +110,7 @@ class ChatWidget(QWidget):
             chat_message = ChatMessage(content=msg.content, role=msg.role)
             self.chat_model.add_message(chat_message)
         
-        # Smooth scroll to bottom
+        self.loading.stop()
         self.smooth_scroll_to_bottom()
 
     def send_message(self, message: str):
@@ -122,6 +135,9 @@ class ChatWidget(QWidget):
 
     @qasync.asyncSlot()
     async def handle_ai_response(self, messages):
+        self.loading.setText("Generating response...")
+        self.loading.start()
+        
         start_time = time.time()
         logger.debug(f"handle_ai_response started in thread: {threading.current_thread().name}")
         
@@ -175,8 +191,18 @@ class ChatWidget(QWidget):
                 "assistant"
             )
 
+            self.loading.stop()
         except Exception as e:
+            self.loading.stop()
             logger.error(f"Error in handle_ai_response: {str(e)}", exc_info=True)
             temp_message.content = f"Error generating response: {str(e)}"
             model_index = self.chat_model.index(last_index)
             self.chat_model.dataChanged.emit(model_index, model_index)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.loading:
+            self.loading.move(
+                (self.width() - self.loading.width()) // 2,
+                (self.height() - self.loading.height()) // 2
+            )
