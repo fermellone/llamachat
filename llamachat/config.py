@@ -11,7 +11,7 @@ class AppConfig:
     model_name: str = "llama3.2"
     temperature: float = 0.7
     max_retries: int = 3
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/llamachat"
+    database_url: str = "postgresql://postgres:root@localhost:5432/llamachat"
     log_level: str = "INFO"
     
     @classmethod

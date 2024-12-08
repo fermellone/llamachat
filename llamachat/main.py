@@ -6,6 +6,8 @@ import asyncio
 from PyQt6.QtWidgets import QApplication
 from .ui.main_window import MainWindow
 from .database.database import init_db
+from .utils.setup import setup_database
+import time
 
 def setup_logging(config: AppConfig):
     """Setup application logging."""
@@ -28,8 +30,18 @@ def main():
         logger = logging.getLogger(__name__)
         logger.info("Starting LlamaChat")
         
-        # Initialize database
-        init_db()
+        # Setup database
+        setup_database()
+        
+        # Wait a moment for PostgreSQL to be fully ready
+        time.sleep(2)
+        
+        try:
+            # Initialize database schema
+            init_db()
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            sys.exit(1)
         
         # Create Qt application
         app = QApplication(sys.argv)

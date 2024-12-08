@@ -1,16 +1,27 @@
 import subprocess
 import sys
 import os
+import time
+from sqlalchemy import create_engine, text
 
 def check_postgres():
+    """Check if PostgreSQL is installed and running."""
     try:
-        result = subprocess.run(['which', 'postgres'], capture_output=True, text=True)
-        return bool(result.stdout.strip())
+        # Check for psql command
+        result = subprocess.run(['which', 'psql'], capture_output=True, text=True)
+        if not result.stdout.strip():
+            return False
+            
+        # Check if PostgreSQL is running
+        result = subprocess.run(['pg_isready'], capture_output=True, text=True)
+        return result.returncode == 0
     except subprocess.CalledProcessError:
         return False
 
 def install_postgres():
     try:
+        print("Starting PostgreSQL installation...")
+        
         # Check if Homebrew is installed
         result = subprocess.run(['which', 'brew'], capture_output=True, text=True)
         if not result.stdout.strip():
@@ -20,17 +31,54 @@ def install_postgres():
 
         print("Installing PostgreSQL...")
         subprocess.run(['brew', 'install', 'postgresql@14'], check=True)
-        subprocess.run(['brew', 'services', 'start', 'postgresql@14'], check=True)
+        print("Restarting PostgreSQL service...")
+        subprocess.run(['brew', 'services', 'restart', 'postgresql@14'], check=True)
 
-        # Wait for PostgreSQL to start
+        # Wait for PostgreSQL to start and be ready
         print("Waiting for PostgreSQL to start...")
-        subprocess.run(['sleep', '5'])
+        max_attempts = 30
+        for attempt in range(max_attempts):
+            result = subprocess.run(['pg_isready'], capture_output=True, text=True)
+            if result.returncode == 0:
+                print("PostgreSQL is ready!")
+                break
+            time.sleep(1)
+            print(f"Waiting for PostgreSQL... ({attempt + 1}/{max_attempts})")
+        else:
+            print("PostgreSQL failed to start")
+            return False
 
-        # Create database and user
-        subprocess.run(['createdb', 'llamachat'], check=True)
-        subprocess.run(['psql', 'llamachat', '-c', 
-                       "CREATE USER postgres WITH PASSWORD 'postgres' SUPERUSER;"], 
-                       check=True)
+        # Try connecting to postgres database first
+        print("Attempting to connect to postgres database...")
+        try:
+            subprocess.run(['psql', 'postgres', '-c', r'\l'], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error connecting to postgres database: {e}")
+            return False
+
+        print("Creating database and user...")
+        try:
+            # Drop database if exists
+            subprocess.run(['dropdb', 'llamachat'], check=False)
+            
+            # Create database
+            subprocess.run(['createdb', 'llamachat'], check=True)
+            print("Database 'llamachat' created successfully.")
+            
+            # Create user
+            subprocess.run(['psql', '-d', 'postgres', '-c', 
+                          f"CREATE USER postgres WITH PASSWORD 'root' SUPERUSER;"], check=True)
+            print("User 'postgres' created successfully.")
+            
+            # Grant privileges
+            subprocess.run(['psql', '-d', 'llamachat', '-c',
+                          "GRANT ALL PRIVILEGES ON DATABASE llamachat TO postgres;"], check=True)
+            subprocess.run(['psql', '-d', 'llamachat', '-c',
+                          "GRANT ALL PRIVILEGES ON SCHEMA public TO postgres;"], check=True)
+            print("Privileges granted successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error setting up database: {e}")
+            return False
 
         return True
     except subprocess.CalledProcessError as e:
@@ -47,7 +95,12 @@ def setup_database():
     # Set environment variable for database URL
     os.environ['DATABASE_URL'] = "postgresql://postgres:root@localhost:5432/llamachat"
     
-    print("PostgreSQL setup completed successfully!")
+    # Connect to the default 'postgres' database
+    engine = create_engine('postgresql://postgres:root@localhost:5432/postgres')
 
-if __name__ == "__main__":
-    setup_database() 
+    # Create a new database
+    with engine.connect() as connection:
+        connection.execute(text("COMMIT"))  # Use text() for raw SQL
+        connection.execute(text("CREATE DATABASE llamachat"))
+
+    print("PostgreSQL setup completed successfully!")
