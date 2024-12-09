@@ -13,7 +13,6 @@ from llamachat.ui.main_window import MainWindow
 from llamachat.database.database import init_db
 from llamachat.utils.setup import setup_database
 from llamachat.config import AppConfig
-import time
 
 def resource_path(relative_path):
     try:
