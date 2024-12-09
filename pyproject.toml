@@ -13,6 +13,7 @@ dependencies = [
     "qasync>=0.27.1",
     "sqlmodel>=0.0.22",
 ]
+license = {text = "MIT"}
 
 [dependency-groups]
 dev = [
