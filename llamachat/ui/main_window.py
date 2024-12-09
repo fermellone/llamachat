@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from llamachat.ui.chat_widget import ChatWidget
 from llamachat.services.database_service import DatabaseService
-from .widgets.overlay_loading import OverlayLoading
-from ..services.ollama_service import OllamaService
+from llamachat.ui.widgets.overlay_loading import OverlayLoading
+from llamachat.services.ollama_service import OllamaService
 import qasync
 
 class MainWindow(QMainWindow):

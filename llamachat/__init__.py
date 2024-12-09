@@ -1,3 +1,3 @@
-from .main import main
+from llamachat.main import main
 
 __all__ = ['main']

@@ -6,15 +6,15 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "backoff>=2.2.1",
-    "beautifulsoup4>=4.12.3",
     "markdown>=3.7",
     "ollama>=0.4.4",
-    "psycopg2-binary>=2.9.10",
+    "pyqt6>=6.7.1",
     "python-dotenv>=1.0.1",
     "qasync>=0.27.1",
     "sqlmodel>=0.0.22",
 ]
+
+[dependency-groups]
 dev = [
-    "dmgbuild>=1.6.2",
     "pyinstaller>=6.11.1",
 ]

@@ -11,7 +11,7 @@ class AppConfig:
     model_name: str = "llama3.2"
     temperature: float = 0.7
     max_retries: int = 3
-    database_url: str = "postgresql://postgres:root@localhost:5432/llamachat"
+    database_url: str = f"sqlite:///{os.path.expanduser('~')}/Library/Application Support/LlamaChat/llamachat.db"
     log_level: str = "INFO"
     
     @classmethod
@@ -21,6 +21,10 @@ class AppConfig:
             with open(config_path) as f:
                 config_dict = json.load(f)
                 return cls(**config_dict)
+        
+        # Ensure the database directory exists
+        db_dir = os.path.dirname(cls.database_url.replace('sqlite:///', ''))
+        os.makedirs(db_dir, exist_ok=True)
         
         return cls(
             model_name=os.getenv("LLAMA_MODEL", cls.model_name),

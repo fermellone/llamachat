@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QStyledItemDelegate
 from PyQt6.QtCore import Qt, QRect, QSize, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPainterPath, QFont, QFontMetrics
-from ..models.chat_message import ChatMessage
+from llamachat.ui.models.chat_message import ChatMessage
 
 class ChatDelegate(QStyledItemDelegate):
     PADDING = 10

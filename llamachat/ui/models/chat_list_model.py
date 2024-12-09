@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QAbstractListModel, Qt, QModelIndex
-from .chat_message import ChatMessage
+from llamachat.ui.models.chat_message import ChatMessage
 
 class ChatListModel(QAbstractListModel):
     def __init__(self):
